@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Reel — AI Movie Recommender</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Syne:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --ink:#0d0d10;--paper:#111116;--card:#18181f;--rim:#26262e;
+  --gold:#c9a84c;--gold-lite:#e8c97a;--red:#c0392b;
+  --text:#e2e2e8;--muted:#6b6b80;--r:10px;
+  --sans:'Syne',sans-serif;--serif:'Playfair Display',serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--ink);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+body::before{
+  content:'';position:fixed;inset:0;z-index:999;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  opacity:.3;
+}
+
+/* HEADER */
+header{
+  position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 3rem;height:68px;
+  background:rgba(13,13,16,.9);
+  backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--rim);
+}
+.logo{font-family:var(--serif);font-size:1.75rem;font-style:italic;color:var(--gold);letter-spacing:1px}
+.logo sup{font-family:var(--sans);font-style:normal;font-size:.48rem;font-weight:500;letter-spacing:3px;color:var(--muted);text-transform:uppercase;vertical-align:top;margin-left:4px;margin-top:7px;display:inline-block}
+.nav-tag{font-size:.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.api-status{display:flex;align-items:center;gap:.5rem;font-size:.72rem;letter-spacing:1px;color:var(--muted)}
+.api-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:background .4s}
+.api-dot.online{background:#2ecc71;box-shadow:0 0 7px #2ecc71}
+.api-dot.offline{background:var(--red)}
+
+/* OFFLINE BANNER */
+.offline-banner{
+  background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.35);
+  color:#e74c3c;padding:.7rem 1.5rem;font-size:.82rem;text-align:center;display:none
+}
+.offline-banner.show{display:block}
+
+/* HERO */
+.hero{position:relative;padding:6rem 3rem 4rem;text-align:center;overflow:hidden}
+.hero-bg{
+  position:absolute;inset:0;z-index:0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%,rgba(201,168,76,.13) 0%,transparent 65%),
+    radial-gradient(ellipse 40% 40% at 10% 90%,rgba(192,57,43,.08) 0%,transparent 60%);
+}
+.hero-eyebrow{
+  position:relative;z-index:1;display:inline-block;
+  font-size:.7rem;letter-spacing:4px;text-transform:uppercase;color:var(--gold);
+  border:1px solid rgba(201,168,76,.3);padding:5px 18px;border-radius:20px;margin-bottom:1.5rem;
+}
+.hero h1{position:relative;z-index:1;font-family:var(--serif);font-size:clamp(2.8rem,7vw,5.5rem);line-height:1.1;font-weight:900;margin-bottom:1.2rem}
+.hero h1 em{font-style:italic;color:var(--gold);display:block}
+.hero p{position:relative;z-index:1;color:var(--muted);font-size:1rem;max-width:480px;margin:0 auto 3rem;line-height:1.7;font-weight:300}
+
+/* SEARCH */
+.search-wrap{position:relative;z-index:10;max-width:600px;margin:0 auto}
+.search-row{
+  display:flex;background:var(--card);border:1.5px solid var(--rim);
+  border-radius:50px;overflow:visible;position:relative;
+  transition:border-color .25s,box-shadow .25s;
+}
+.search-row:focus-within{border-color:var(--gold);box-shadow:0 0 0 4px rgba(201,168,76,.1)}
+.search-icon{position:absolute;left:20px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+input#si{
+  flex:1;background:transparent;border:none;outline:none;
+  color:var(--text);font-family:var(--sans);font-size:.95rem;
+  padding:.95rem .75rem .95rem 50px;
+}
+input#si::placeholder{color:var(--muted)}
+.search-btn{
+  margin:5px;background:var(--gold);color:var(--ink);border:none;border-radius:50px;
+  padding:.65rem 1.6rem;font-family:var(--sans);font-weight:500;font-size:.88rem;
+  letter-spacing:.5px;cursor:pointer;transition:background .2s,transform .1s;flex-shrink:0;
+}
+.search-btn:hover{background:var(--gold-lite)}
+.search-btn:active{transform:scale(.96)}
+
+/* AUTOCOMPLETE */
+.autocomplete{
+  position:absolute;top:calc(100% + 8px);left:0;right:0;
+  background:var(--card);border:1px solid var(--rim);border-radius:var(--r);
+  overflow:hidden;box-shadow:0 24px 48px rgba(0,0,0,.6);
+  display:none;z-index:200;max-height:280px;overflow-y:auto;
+}
+.autocomplete.open{display:block}
+.ac-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.8rem 1.2rem;cursor:pointer;border-bottom:1px solid var(--rim);
+  transition:background .15s;gap:1rem;
+}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover{background:rgba(201,168,76,.07)}
+.ac-title{font-size:.9rem}.ac-genre{font-size:.7rem;color:var(--muted);white-space:nowrap}
+
+/* GENRE BAR */
+.genres-bar{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem;padding:2.5rem 2rem 0;position:relative;z-index:1}
+.genre-pill{
+  padding:5px 16px;border-radius:50px;border:1px solid var(--rim);
+  background:transparent;color:var(--muted);font-family:var(--sans);font-size:.75rem;
+  letter-spacing:.5px;cursor:pointer;transition:all .2s;user-select:none;
+}
+.genre-pill:hover{border-color:var(--gold);color:var(--gold)}
+.genre-pill.on{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:500}
+
+/* SECTION */
+.section{padding:4rem 3rem;max-width:1380px;margin:0 auto}
+.section-head{display:flex;align-items:baseline;gap:1rem;margin-bottom:2rem}
+.section-title{font-family:var(--serif);font-size:1.9rem;font-style:italic;color:var(--text)}
+.section-count{font-size:.7rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.divider{flex:1;height:1px;background:var(--rim);margin-left:1rem}
+
+/* SELECTED BANNER */
+#selectedBanner{margin-bottom:2.5rem}
+.sel-card{
+  display:flex;gap:1.5rem;align-items:flex-start;
+  background:var(--card);border:1px solid var(--rim);border-radius:var(--r);
+  padding:1.5rem;position:relative;overflow:hidden;
+}
+.sel-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--gold),transparent)}
+.sel-poster{width:90px;border-radius:6px;flex-shrink:0;object-fit:cover}
+.sel-ph{width:90px;min-height:135px;border-radius:6px;flex-shrink:0;background:var(--rim);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.sel-label{font-size:.65rem;letter-spacing:3px;text-transform:uppercase;color:var(--gold);margin-bottom:.4rem}
+.sel-title{font-family:var(--serif);font-size:1.6rem;line-height:1.2}
+.sel-meta{color:var(--muted);font-size:.82rem;margin:.5rem 0 .8rem}
+.sel-genres{display:flex;flex-wrap:wrap;gap:.35rem}
+.sel-gpill{font-size:.68rem;padding:3px 10px;border:1px solid var(--rim);border-radius:20px;color:var(--muted)}
+
+/* GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:1.25rem}
+
+/* CARD */
+.movie-card{
+  background:var(--card);border:1px solid var(--rim);border-radius:var(--r);
+  overflow:hidden;cursor:pointer;
+  transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s,border-color .2s;
+  position:relative;
+}
+.movie-card:hover{transform:translateY(-6px) scale(1.01);box-shadow:0 24px 48px rgba(0,0,0,.55);border-color:rgba(201,168,76,.4)}
+.card-pw{position:relative;aspect-ratio:2/3;overflow:hidden;background:var(--rim)}
+.card-pw img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .4s ease}
+.movie-card:hover .card-pw img{transform:scale(1.04)}
+.card-ph{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;color:var(--muted);background:linear-gradient(160deg,#1e1e28,#14141c)}
+.card-ph span{font-size:.7rem;text-align:center;padding:0 .75rem;font-weight:400;opacity:.6;line-height:1.4}
+.score-badge{position:absolute;bottom:8px;right:8px;background:rgba(13,13,16,.85);border:1px solid var(--gold);color:var(--gold);font-size:.68rem;font-weight:500;padding:3px 9px;border-radius:20px;backdrop-filter:blur(4px)}
+.rating-badge{position:absolute;top:8px;left:8px;background:rgba(13,13,16,.8);color:#f1c40f;font-size:.68rem;font-weight:500;padding:3px 9px;border-radius:20px}
+.card-body{padding:.75rem}
+.card-title{font-size:.85rem;font-weight:500;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card-genres{font-size:.68rem;color:var(--muted);margin-top:.3rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* LOADER / EMPTY */
+.loader{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem;gap:1rem;color:var(--muted)}
+.spin{width:38px;height:38px;border:2.5px solid var(--rim);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{grid-column:1/-1;text-align:center;padding:4rem 2rem;color:var(--muted)}
+.empty .ico{font-size:2.8rem;margin-bottom:.75rem}
+.empty p{font-size:.9rem;margin-top:.4rem}
+.empty code{background:var(--rim);padding:2px 8px;border-radius:4px;font-size:.82rem;color:var(--text)}
+
+/* FOOTER */
+footer{text-align:center;padding:2.5rem 2rem;border-top:1px solid var(--rim);color:var(--muted);font-size:.78rem}
+footer strong{color:var(--gold)}
+
+@media(max-width:768px){
+  header{padding:0 1.2rem}
+  .hero{padding:4rem 1.5rem 3rem}
+  .section{padding:2.5rem 1.25rem}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:1rem}
+  .sel-card{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Reel<sup>AI</sup></div>
+  <div class="nav-tag">Movie Intelligence</div>
+  <div class="api-status">
+    <div class="api-dot" id="apiDot"></div>
+    <span id="apiLabel">checking…</span>
+  </div>
+</header>
+
+<div class="offline-banner" id="offlineBanner">
+  ⚠ Backend offline — run <code style="background:rgba(255,255,255,.08);padding:2px 8px;border-radius:4px">python app.py</code> then refresh.
+</div>
+
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-eyebrow">Word2Vec · Cosine Similarity · Genre Matching</div>
+  <h1>Cinema knows<em>what you love.</em></h1>
+  <p>Type a movie you enjoy. Our AI reads its soul and finds what resonates — semantically and emotionally.</p>
+  <div class="search-wrap">
+    <div class="search-row">
+      <svg class="search-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input id="si" type="text" placeholder="e.g. The Notebook, Inception, Heat…" autocomplete="off"/>
+      <button class="search-btn" onclick="doSearch()">Find Films</button>
+    </div>
+    <div class="autocomplete" id="acDrop"></div>
+  </div>
+  <div class="genres-bar" id="genresBar"></div>
+</section>
+
+<div class="section" id="resultsSection" style="display:none">
+  <div id="selectedBanner"></div>
+  <div class="section-head">
+    <div class="section-title">Recommended for You</div>
+    <div class="section-count" id="recCount"></div>
+    <div class="divider"></div>
+  </div>
+  <div class="grid" id="recGrid"></div>
+</div>
+
+<div class="section" id="popularSection">
+  <div class="section-head">
+    <div class="section-title" id="popTitle">Top Rated</div>
+    <div class="section-count">Bayesian weighted score</div>
+    <div class="divider"></div>
+  </div>
+  <div class="grid" id="popularGrid"></div>
+</div>
+
+<footer>
+  Powered by <strong>Word2Vec + Cosine Similarity</strong> &nbsp;·&nbsp;
+  Overview semantics ×0.7 &nbsp;+&nbsp; Genre one-hot ×0.3 &nbsp;+&nbsp; Bayesian rating ×0.2
+</footer>
+
+<script>
+const API = "http://localhost:5000";
+
+const GENRES = ["Action","Adventure","Animation","Comedy","Crime","Drama","Fantasy",
+                "Horror","Mystery","Romance","Science Fiction","Thriller","War","Western","Music","History"];
+
+/* ── helpers ── */
+function cleanTitle(t){ return t.replace(/\s*\(\d{4}\)\s*$/,"").trim() }
+function yearOf(t){ const m=t.match(/\((\d{4})\)/); return m?m[1]:"" }
+
+function ph(title){
+  return `<div class="card-ph">
+    <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" opacity=".3">
+      <rect x="2" y="2" width="20" height="20" rx="2"/>
+      <circle cx="9" cy="14" r="2"/>
+      <path d="m21 15-5-5-5 7"/>
+    </svg>
+    <span>${title}</span>
+  </div>`;
+}
+
+function makeCard(m, showScore=false){
+  const el = document.createElement("div");
+  el.className = "movie-card";
+  el.onclick = ()=> selectMovie(m.title);
+  const t = cleanTitle(m.title), y = yearOf(m.title);
+  const genres = (m.genres||[]).join(" · ");
+  const scoreBadge = showScore && m.score!=null
+    ? `<div class="score-badge">${Math.round(m.score*100)}% match</div>` : "";
+  const ratingBadge = m.rating
+    ? `<div class="rating-badge">⭐ ${m.rating}</div>` : "";
+
+  const imgHtml = m.poster
+    ? `<img src="${m.poster}" alt="${t}" loading="lazy"
+         onerror="this.parentElement.innerHTML=\`${ph(t).replace(/`/g,"\\`")}\`">`
+    : ph(t);
+
+  el.innerHTML = `
+    <div class="card-pw">
+      ${imgHtml}
+      ${ratingBadge}
+      ${scoreBadge}
+    </div>
+    <div class="card-body">
+      <div class="card-title">${t}${y?` <span style="color:var(--muted);font-weight:300">(${y})</span>`:""}  </div>
+      <div class="card-genres">${genres}</div>
+    </div>`;
+  return el;
+}
+
+function renderGrid(id, movies, showScore=false){
+  const el = document.getElementById(id);
+  el.innerHTML = "";
+  if(!movies.length){
+    el.innerHTML=`<div class="empty"><div class="ico">🎬</div><p>Nothing found here.</p></div>`;
+    return;
+  }
+  movies.forEach(m => el.appendChild(makeCard(m, showScore)));
+}
+
+function loading(id, msg="Calculating similarity…"){
+  document.getElementById(id).innerHTML =
+    `<div class="loader"><div class="spin"></div><span>${msg}</span></div>`;
+}
+
+/* ── API health ── */
+async function checkApi(){
+  try{
+    await fetch(`${API}/`,{signal:AbortSignal.timeout(2500)});
+    document.getElementById("apiDot").className = "api-dot online";
+    document.getElementById("apiLabel").textContent = "API online";
+    document.getElementById("offlineBanner").classList.remove("show");
+    return true;
+  }catch{
+    document.getElementById("apiDot").className = "api-dot offline";
+    document.getElementById("apiLabel").textContent = "API offline";
+    document.getElementById("offlineBanner").classList.add("show");
+    return false;
+  }
+}
+
+/* ── main search / recommend ── */
+async function selectMovie(title){
+  document.getElementById("si").value = title;
+  closeAc();
+  await doSearch();
+}
+
+async function doSearch(){
+  const q = document.getElementById("si").value.trim();
+  if(!q) return;
+
+  document.getElementById("resultsSection").style.display = "block";
+  document.getElementById("popularSection").style.display = "none";
+  loading("recGrid");
+  document.getElementById("selectedBanner").innerHTML = "";
+  document.getElementById("recCount").textContent = "";
+
+  try{
+    const res  = await fetch(`${API}/api/recommend?title=${encodeURIComponent(q)}&n=12`);
+    if(!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    /* selected movie banner */
+    const qm = data.query;
+    const selPoster = qm.poster
+      ? `<img class="sel-poster" src="${qm.poster}" alt="${cleanTitle(qm.title)}" onerror="this.style.display='none'">`
+      : `<div class="sel-ph"><svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="9" cy="14" r="2"/><path d="m21 15-5-5-5 7"/></svg></div>`;
+
+    document.getElementById("selectedBanner").innerHTML = `
+      <div class="sel-card">
+        ${selPoster}
+        <div style="flex:1">
+          <div class="sel-label">Because you searched</div>
+          <div class="sel-title">${cleanTitle(qm.title)}</div>
+          <div class="sel-meta">${yearOf(qm.title)?yearOf(qm.title)+" &nbsp;·&nbsp; ":""}⭐ ${qm.rating||"—"} &nbsp;·&nbsp; ${(qm.genres||[]).length} genres</div>
+          <div class="sel-genres">${(qm.genres||[]).map(g=>`<span class="sel-gpill">${g}</span>`).join("")}</div>
+        </div>
+      </div>`;
+
+    document.getElementById("recCount").textContent = `${data.recommendations.length} results`;
+    renderGrid("recGrid", data.recommendations, true);
+
+  }catch(e){
+    document.getElementById("recGrid").innerHTML =
+      `<div class="empty">
+        <div class="ico">⚠️</div>
+        <strong>Backend unreachable</strong>
+        <p>Make sure <code>python app.py</code> is running on port 5000.</p>
+      </div>`;
+  }
+}
+
+/* ── autocomplete ── */
+let acT = null;
+document.getElementById("si").addEventListener("input", function(){
+  clearTimeout(acT);
+  const q = this.value.trim();
+  if(q.length < 2){ closeAc(); return; }
+  acT = setTimeout(()=>fetchAc(q), 220);
+});
+
+async function fetchAc(q){
+  try{
+    const res   = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}&limit=8`);
+    const items = await res.json();
+    const drop  = document.getElementById("acDrop");
+    if(!items.length){ closeAc(); return; }
+    drop.innerHTML = items.map(m=>`
+      <div class="ac-item" onclick="selectMovie('${m.title.replace(/'/g,"\\'")}')">
+        <span class="ac-title">${cleanTitle(m.title)}</span>
+        <span class="ac-genre">${(m.genres||[]).slice(0,2).join(", ")}</span>
+      </div>`).join("");
+    drop.classList.add("open");
+  }catch{ closeAc(); }
+}
+
+document.addEventListener("click", e=>{ if(!e.target.closest(".search-wrap")) closeAc(); });
+function closeAc(){ const d=document.getElementById("acDrop"); d.classList.remove("open"); d.innerHTML=""; }
+document.getElementById("si").addEventListener("keydown", e=>{ if(e.key==="Enter") doSearch(); });
+
+/* ── genre bar ── */
+(function buildGenreBar(){
+  document.getElementById("genresBar").innerHTML =
+    GENRES.map(g=>`<div class="genre-pill" onclick="filterGenre('${g}')">${g}</div>`).join("");
+})();
+
+async function filterGenre(genre){
+  document.querySelectorAll(".genre-pill").forEach(p=>p.classList.toggle("on", p.textContent===genre));
+  document.getElementById("popularSection").style.display = "block";
+  document.getElementById("resultsSection").style.display = "none";
+  document.getElementById("popTitle").textContent = genre;
+  loading("popularGrid","Loading…");
+  try{
+    const res  = await fetch(`${API}/api/popular?n=80`);
+    const data = await res.json();
+    const filt = data.filter(m=>(m.genres||[]).includes(genre)).slice(0,20);
+    renderGrid("popularGrid", filt);
+  }catch{ renderGrid("popularGrid",[]); }
+}
+
+/* ── popular (home) ── */
+async function loadPopular(){
+  loading("popularGrid","Loading top-rated movies…");
+  try{
+    const res  = await fetch(`${API}/api/popular?n=20`);
+    const data = await res.json();
+    renderGrid("popularGrid", data);
+  }catch{
+    document.getElementById("popularGrid").innerHTML =
+      `<div class="empty">
+        <div class="ico">🎬</div>
+        <strong>Start the Flask backend to load movies</strong>
+        <p>Run: <code>python app.py</code></p>
+      </div>`;
+  }
+}
+
+/* ── init ── */
+checkApi().then(ok => { if(ok) loadPopular(); else {
+  // show offline placeholder cards
+  document.getElementById("popularGrid").innerHTML =
+    `<div class="empty"><div class="ico">🔌</div><strong>Backend not running</strong><p>Run <code>python app.py</code> to activate the AI model.</p></div>`;
+}});
+setInterval(checkApi, 15000);
+</script>
+</body>
+</html>

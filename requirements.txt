@@ -1,0 +1,9 @@
+flask
+flask-cors
+gensim==4.3.3
+pandas
+scikit-learn
+nltk
+requests
+numpy==1.26.4
+scipy==1.13.0
